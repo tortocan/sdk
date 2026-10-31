@@ -91,3 +91,105 @@ export interface ErrorResponse {
 export type OmssResult<T> =
     | { data: T; error: null }
     | { data: null; error: ErrorResponse }
+
+// ---- Scrobble (local playback progress / resume) ----
+//
+// An OMSS source backend is stateless, but a self-hosted one (e.g. gatearr) can additionally act as
+// its own local "scrobble" server — tracking playback progress so a frontend can offer resume /
+// "continue watching" and a watched list. These types + the OmssClient scrobble methods below cover
+// that OMSS extension, served under `/scrobble` on the same host as the `/v1` source surface. A title
+// is keyed by its TMDB identity: `m{tmdbId}` for a movie, `e{showTmdbId}-{season}-{episode}` for an
+// episode. Backends that don't implement it simply 404 these routes.
+
+export type ScrobbleAction = 'start' | 'pause' | 'stop'
+export type ScrobbleMediaType = 'movie' | 'episode'
+export type ScrobbleStatus = 'started' | 'paused' | 'stopped'
+
+/** Body of `POST /scrobble`. `season`/`episode` are required for an episode, ignored for a movie. */
+export interface ScrobbleRequest {
+    mediaType: ScrobbleMediaType
+    tmdbId: number
+    season?: number
+    episode?: number
+    progress: number // 0–100, percent complete
+    action: ScrobbleAction
+    title?: string // optional display title, stored denormalized so clients needn't re-resolve it
+}
+
+/** The stored playback state for one title. */
+export interface ScrobbleState {
+    mediaKey: string // "m{tmdb}" | "e{tmdb}-{s}-{e}"
+    mediaType: ScrobbleMediaType
+    tmdbId: number
+    season: number
+    episode: number
+    progress: number // 0–100
+    status: ScrobbleStatus
+    watched: boolean // true once stopped at ≥80%
+    watchedAt: number // unix seconds; 0 if never
+    updatedAt: number // unix seconds of the last scrobble
+    title?: string | null // denormalized display title (movie title | show title); null if unknown
+}
+
+/** Acknowledgement returned by `POST /scrobble` (the upserted row's live state). */
+export interface ScrobbleAck {
+    mediaKey: string
+    status: ScrobbleStatus
+    progress: number
+    watched: boolean
+    watchedAt: number
+    updatedAt: number
+}
+
+/** `GET /scrobble/playback` — resume / "continue watching": started-but-unfinished titles. */
+export interface ScrobblePlaybackResponse {
+    count: number
+    data: ScrobbleState[]
+}
+
+/** `GET /scrobble/history` — watched titles, DataTables-style paging counters. */
+export interface ScrobbleHistoryResponse {
+    recordsTotal: number
+    recordsFiltered: number
+    data: ScrobbleState[]
+}
+
+/** `GET /scrobble/show/{tmdbId}` — a show's scrobbled episodes, ordered by season then episode. */
+export interface ScrobbleShowResponse {
+    count: number
+    data: ScrobbleState[]
+}
+
+export type ResumeReason = 'in_progress' | 'next_up' | 'rewatch' | 'none'
+
+/**
+ * `GET /scrobble/resume/{type}/{tmdbId}` — the backend's "continue watching" decision for a title, so
+ * a client asks instead of re-deriving it. When {@link resumable} is false the client shows Play;
+ * otherwise {@link mediaType}/{@link season}/{@link episode} identify what to play and {@link progress}
+ * is the 0–100 seek position (0 = start of that episode).
+ */
+export interface ResumeTarget {
+    resumable: boolean
+    mediaType: ScrobbleMediaType // 'movie' | 'episode'
+    tmdbId: number
+    season: number // 0 for a movie
+    episode: number // 0 for a movie
+    progress: number // 0–100 seek position
+    title: string | null
+    reason: ResumeReason
+}
+
+/**
+ * Builds the `/scrobble` media key for a title, matching the backend's scheme. Handy for a `GET
+ * /scrobble/{mediaKey}` lookup when resuming a specific movie/episode.
+ */
+export function scrobbleMediaKey(ref: {
+    mediaType: ScrobbleMediaType
+    tmdbId: number
+    season?: number
+    episode?: number
+}): string {
+    return ref.mediaType === 'movie'
+        ? `m${ref.tmdbId}`
+        : `e${ref.tmdbId}-${ref.season ?? 0}-${ref.episode ?? 0}`
+}
