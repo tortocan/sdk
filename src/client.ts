@@ -12,8 +12,14 @@ import type {
     ScrobbleHistoryResponse,
     ScrobbleShowResponse,
     ResumeTarget,
+    FollowRequest,
+    FollowAck,
+    FollowState,
+    FollowListResponse,
+    NotificationListResponse,
+    NotificationCount,
 } from './types'
-import { scrobbleMediaKey } from './types'
+import { scrobbleMediaKey, followMediaKey } from './types'
 
 export interface OmssClientConfig {
     baseUrl: string
@@ -210,6 +216,81 @@ export class OmssClient {
     /** DELETE /scrobble — clear ALL scrobble state (watch history + resume points). */
     clearScrobbles() {
         return this.requestJson<{ deleted: number }>('/scrobble', { method: 'DELETE' })
+    }
+
+    // ---- Follow + notifications (optional extension, served under /follow + /notifications) ----
+
+    /**
+     * POST /follow — follow a title (movie or show, keyed by TMDB identity) to be notified of new
+     * releases. Upserts; `created` is false when it was already followed.
+     */
+    follow(req: FollowRequest) {
+        return this.requestJson<FollowAck>('/follow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req),
+        })
+    }
+
+    /** GET /follow — every followed title, newest-first. */
+    getFollows() {
+        return this.requestJson<FollowListResponse>('/follow')
+    }
+
+    /** GET /follow/{mediaKey} — one follow ("m{tmdb}" | "s{tmdb}"), or an error if not followed. */
+    getFollow(mediaKey: string) {
+        return this.requestJson<FollowState>(`/follow/${encodeURIComponent(mediaKey)}`)
+    }
+
+    /** Convenience: is this title currently followed? */
+    async isFollowing(ref: { mediaType: 'movie' | 'tv' | 'show'; tmdbId: number }): Promise<boolean> {
+        const { data } = await this.getFollow(followMediaKey(ref))
+        return data != null
+    }
+
+    /** DELETE /follow/{mediaKey} — unfollow one title. */
+    unfollow(mediaKey: string) {
+        return this.requestJson<null>(`/follow/${encodeURIComponent(mediaKey)}`, { method: 'DELETE' })
+    }
+
+    /** DELETE /follow — unfollow everything. */
+    clearFollows() {
+        return this.requestJson<{ deleted: number }>('/follow', { method: 'DELETE' })
+    }
+
+    /** GET /notifications — release notifications, newest-first, with DataTables-style paging. */
+    getNotifications(opts?: { unreadOnly?: boolean; start?: number; length?: number }) {
+        const p = new URLSearchParams()
+        if (opts?.unreadOnly) p.set('unreadOnly', 'true')
+        if (opts?.start != null) p.set('start', String(opts.start))
+        if (opts?.length != null) p.set('length', String(opts.length))
+        const q = p.toString() ? `?${p.toString()}` : ''
+        return this.requestJson<NotificationListResponse>(`/notifications${q}`)
+    }
+
+    /** GET /notifications/count — the unread count for the bell badge. */
+    getNotificationCount() {
+        return this.requestJson<NotificationCount>('/notifications/count')
+    }
+
+    /** POST /notifications/read — mark all unread notifications read; returns the count updated. */
+    markNotificationsRead() {
+        return this.requestJson<{ updated: number }>('/notifications/read', { method: 'POST' })
+    }
+
+    /** POST /notifications/{id}/read — mark one notification read. */
+    markNotificationRead(id: number) {
+        return this.requestJson<null>(`/notifications/${id}/read`, { method: 'POST' })
+    }
+
+    /** DELETE /notifications/{id} — remove one notification. */
+    deleteNotification(id: number) {
+        return this.requestJson<null>(`/notifications/${id}`, { method: 'DELETE' })
+    }
+
+    /** DELETE /notifications — clear all notifications. */
+    clearNotifications() {
+        return this.requestJson<{ deleted: number }>('/notifications', { method: 'DELETE' })
     }
 
     /**

@@ -22,6 +22,7 @@ var index_exports = {};
 __export(index_exports, {
   OmssClient: () => OmssClient,
   createOmssClient: () => createOmssClient,
+  followMediaKey: () => followMediaKey,
   scrobbleMediaKey: () => scrobbleMediaKey
 });
 module.exports = __toCommonJS(index_exports);
@@ -30,6 +31,9 @@ module.exports = __toCommonJS(index_exports);
 function scrobbleMediaKey(ref) {
   var _a, _b;
   return ref.mediaType === "movie" ? `m${ref.tmdbId}` : `e${ref.tmdbId}-${(_a = ref.season) != null ? _a : 0}-${(_b = ref.episode) != null ? _b : 0}`;
+}
+function followMediaKey(ref) {
+  return ref.mediaType === "movie" ? `m${ref.tmdbId}` : `s${ref.tmdbId}`;
 }
 
 // src/client.ts
@@ -189,6 +193,68 @@ var OmssClient = class _OmssClient {
   clearScrobbles() {
     return this.requestJson("/scrobble", { method: "DELETE" });
   }
+  // ---- Follow + notifications (optional extension, served under /follow + /notifications) ----
+  /**
+   * POST /follow — follow a title (movie or show, keyed by TMDB identity) to be notified of new
+   * releases. Upserts; `created` is false when it was already followed.
+   */
+  follow(req) {
+    return this.requestJson("/follow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req)
+    });
+  }
+  /** GET /follow — every followed title, newest-first. */
+  getFollows() {
+    return this.requestJson("/follow");
+  }
+  /** GET /follow/{mediaKey} — one follow ("m{tmdb}" | "s{tmdb}"), or an error if not followed. */
+  getFollow(mediaKey) {
+    return this.requestJson(`/follow/${encodeURIComponent(mediaKey)}`);
+  }
+  /** Convenience: is this title currently followed? */
+  async isFollowing(ref) {
+    const { data } = await this.getFollow(followMediaKey(ref));
+    return data != null;
+  }
+  /** DELETE /follow/{mediaKey} — unfollow one title. */
+  unfollow(mediaKey) {
+    return this.requestJson(`/follow/${encodeURIComponent(mediaKey)}`, { method: "DELETE" });
+  }
+  /** DELETE /follow — unfollow everything. */
+  clearFollows() {
+    return this.requestJson("/follow", { method: "DELETE" });
+  }
+  /** GET /notifications — release notifications, newest-first, with DataTables-style paging. */
+  getNotifications(opts) {
+    const p = new URLSearchParams();
+    if (opts == null ? void 0 : opts.unreadOnly) p.set("unreadOnly", "true");
+    if ((opts == null ? void 0 : opts.start) != null) p.set("start", String(opts.start));
+    if ((opts == null ? void 0 : opts.length) != null) p.set("length", String(opts.length));
+    const q = p.toString() ? `?${p.toString()}` : "";
+    return this.requestJson(`/notifications${q}`);
+  }
+  /** GET /notifications/count — the unread count for the bell badge. */
+  getNotificationCount() {
+    return this.requestJson("/notifications/count");
+  }
+  /** POST /notifications/read — mark all unread notifications read; returns the count updated. */
+  markNotificationsRead() {
+    return this.requestJson("/notifications/read", { method: "POST" });
+  }
+  /** POST /notifications/{id}/read — mark one notification read. */
+  markNotificationRead(id) {
+    return this.requestJson(`/notifications/${id}/read`, { method: "POST" });
+  }
+  /** DELETE /notifications/{id} — remove one notification. */
+  deleteNotification(id) {
+    return this.requestJson(`/notifications/${id}`, { method: "DELETE" });
+  }
+  /** DELETE /notifications — clear all notifications. */
+  clearNotifications() {
+    return this.requestJson("/notifications", { method: "DELETE" });
+  }
   /**
    * Utils Function to set the base URL of the API client after instantiation.
    * Useful when the base URL is not known at the time of client creation.
@@ -208,5 +274,6 @@ var createOmssClient = (config) => OmssClient.create(config);
 0 && (module.exports = {
   OmssClient,
   createOmssClient,
+  followMediaKey,
   scrobbleMediaKey
 });

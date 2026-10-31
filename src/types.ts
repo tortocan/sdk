@@ -193,3 +193,82 @@ export function scrobbleMediaKey(ref: {
         ? `m${ref.tmdbId}`
         : `e${ref.tmdbId}-${ref.season ?? 0}-${ref.episode ?? 0}`
 }
+
+// ---- Follow + notifications (release tracking) ----
+//
+// A self-hosted OMSS backend (e.g. gatearr) can also let a frontend "follow" a title to be notified of
+// new releases. Follows are stored locally and keyed by TMDB identity — `m{tmdbId}` for a movie,
+// `s{tmdbId}` for a show (distinct from the scrobble episode key). A background scan writes
+// notifications when a followed movie/episode gains a file (`available`) or appears on the upstream
+// calendar (`upcoming`); the UI's bell reads them. Served under `/follow` + `/notifications`; backends
+// that don't implement it simply 404 these routes.
+
+export type FollowMediaType = 'movie' | 'show'
+
+/** Body of `POST /follow`. `mediaType` accepts `tv` as an alias for `show`. */
+export interface FollowRequest {
+    mediaType: 'movie' | 'tv' | 'show'
+    tmdbId: number
+    title?: string
+}
+
+/** One followed title. */
+export interface FollowState {
+    mediaKey: string // "m{tmdb}" | "s{tmdb}"
+    mediaType: FollowMediaType
+    tmdbId: number
+    title?: string | null
+    createdAt: number // unix seconds
+    availableWatermark: number // unix seconds; only newer files/releases notify
+}
+
+/** Acknowledgement returned by `POST /follow`. `created` is false when it was already followed. */
+export interface FollowAck {
+    mediaKey: string
+    mediaType: FollowMediaType
+    tmdbId: number
+    title: string | null
+    following: boolean
+    created: boolean
+}
+
+/** `GET /follow` — every followed title, newest-first. */
+export interface FollowListResponse {
+    count: number
+    data: FollowState[]
+}
+
+export type NotificationKind = 'available' | 'upcoming'
+
+/** One release notification for a followed title. */
+export interface NotificationItem {
+    id: number
+    dedupeKey: string
+    mediaKey: string
+    tmdbId: number
+    mediaType: FollowMediaType
+    kind: NotificationKind
+    title: string
+    message: string
+    season: number // episodes; 0 for a movie
+    episode: number // episodes; 0 for a movie
+    createdAt: number // unix seconds
+    readAt: number | null // unix seconds; null = unread
+}
+
+/** `GET /notifications` — newest-first, DataTables-style paging counters. */
+export interface NotificationListResponse {
+    recordsTotal: number
+    recordsFiltered: number
+    data: NotificationItem[]
+}
+
+/** `GET /notifications/count` — the unread count for the bell badge. */
+export interface NotificationCount {
+    unread: number
+}
+
+/** Builds the `/follow` media key for a title, matching the backend's scheme. */
+export function followMediaKey(ref: { mediaType: 'movie' | 'tv' | 'show'; tmdbId: number }): string {
+    return ref.mediaType === 'movie' ? `m${ref.tmdbId}` : `s${ref.tmdbId}`
+}

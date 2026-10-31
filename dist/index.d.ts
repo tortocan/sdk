@@ -148,6 +148,67 @@ declare function scrobbleMediaKey(ref: {
     season?: number;
     episode?: number;
 }): string;
+type FollowMediaType = 'movie' | 'show';
+/** Body of `POST /follow`. `mediaType` accepts `tv` as an alias for `show`. */
+interface FollowRequest {
+    mediaType: 'movie' | 'tv' | 'show';
+    tmdbId: number;
+    title?: string;
+}
+/** One followed title. */
+interface FollowState {
+    mediaKey: string;
+    mediaType: FollowMediaType;
+    tmdbId: number;
+    title?: string | null;
+    createdAt: number;
+    availableWatermark: number;
+}
+/** Acknowledgement returned by `POST /follow`. `created` is false when it was already followed. */
+interface FollowAck {
+    mediaKey: string;
+    mediaType: FollowMediaType;
+    tmdbId: number;
+    title: string | null;
+    following: boolean;
+    created: boolean;
+}
+/** `GET /follow` — every followed title, newest-first. */
+interface FollowListResponse {
+    count: number;
+    data: FollowState[];
+}
+type NotificationKind = 'available' | 'upcoming';
+/** One release notification for a followed title. */
+interface NotificationItem {
+    id: number;
+    dedupeKey: string;
+    mediaKey: string;
+    tmdbId: number;
+    mediaType: FollowMediaType;
+    kind: NotificationKind;
+    title: string;
+    message: string;
+    season: number;
+    episode: number;
+    createdAt: number;
+    readAt: number | null;
+}
+/** `GET /notifications` — newest-first, DataTables-style paging counters. */
+interface NotificationListResponse {
+    recordsTotal: number;
+    recordsFiltered: number;
+    data: NotificationItem[];
+}
+/** `GET /notifications/count` — the unread count for the bell badge. */
+interface NotificationCount {
+    unread: number;
+}
+/** Builds the `/follow` media key for a title, matching the backend's scheme. */
+declare function followMediaKey(ref: {
+    mediaType: 'movie' | 'tv' | 'show';
+    tmdbId: number;
+}): string;
 
 interface OmssClientConfig {
     baseUrl: string;
@@ -238,6 +299,46 @@ declare class OmssClient {
         deleted: number;
     }>>;
     /**
+     * POST /follow — follow a title (movie or show, keyed by TMDB identity) to be notified of new
+     * releases. Upserts; `created` is false when it was already followed.
+     */
+    follow(req: FollowRequest): Promise<OmssResult<FollowAck>>;
+    /** GET /follow — every followed title, newest-first. */
+    getFollows(): Promise<OmssResult<FollowListResponse>>;
+    /** GET /follow/{mediaKey} — one follow ("m{tmdb}" | "s{tmdb}"), or an error if not followed. */
+    getFollow(mediaKey: string): Promise<OmssResult<FollowState>>;
+    /** Convenience: is this title currently followed? */
+    isFollowing(ref: {
+        mediaType: 'movie' | 'tv' | 'show';
+        tmdbId: number;
+    }): Promise<boolean>;
+    /** DELETE /follow/{mediaKey} — unfollow one title. */
+    unfollow(mediaKey: string): Promise<OmssResult<null>>;
+    /** DELETE /follow — unfollow everything. */
+    clearFollows(): Promise<OmssResult<{
+        deleted: number;
+    }>>;
+    /** GET /notifications — release notifications, newest-first, with DataTables-style paging. */
+    getNotifications(opts?: {
+        unreadOnly?: boolean;
+        start?: number;
+        length?: number;
+    }): Promise<OmssResult<NotificationListResponse>>;
+    /** GET /notifications/count — the unread count for the bell badge. */
+    getNotificationCount(): Promise<OmssResult<NotificationCount>>;
+    /** POST /notifications/read — mark all unread notifications read; returns the count updated. */
+    markNotificationsRead(): Promise<OmssResult<{
+        updated: number;
+    }>>;
+    /** POST /notifications/{id}/read — mark one notification read. */
+    markNotificationRead(id: number): Promise<OmssResult<null>>;
+    /** DELETE /notifications/{id} — remove one notification. */
+    deleteNotification(id: number): Promise<OmssResult<null>>;
+    /** DELETE /notifications — clear all notifications. */
+    clearNotifications(): Promise<OmssResult<{
+        deleted: number;
+    }>>;
+    /**
      * Utils Function to set the base URL of the API client after instantiation.
      * Useful when the base URL is not known at the time of client creation.
      */
@@ -249,4 +350,4 @@ declare class OmssClient {
 }
 declare const createOmssClient: (config: OmssClientConfig) => OmssClient;
 
-export { type AudioTrack, type Diagnostic, type DiagnosticSeverity, type ErrorCode, type ErrorObject, type ErrorResponse, type HealthResponse, OmssClient, type OmssClientConfig, type OmssResult, type Provider, type RefreshResponse, type ResumeReason, type ResumeTarget, type ScrobbleAck, type ScrobbleAction, type ScrobbleHistoryResponse, type ScrobbleMediaType, type ScrobblePlaybackResponse, type ScrobbleRequest, type ScrobbleShowResponse, type ScrobbleState, type ScrobbleStatus, type Source, type SourceResponse, type SourceType, type Subtitle, type SubtitleFormat, createOmssClient, scrobbleMediaKey };
+export { type AudioTrack, type Diagnostic, type DiagnosticSeverity, type ErrorCode, type ErrorObject, type ErrorResponse, type FollowAck, type FollowListResponse, type FollowMediaType, type FollowRequest, type FollowState, type HealthResponse, type NotificationCount, type NotificationItem, type NotificationKind, type NotificationListResponse, OmssClient, type OmssClientConfig, type OmssResult, type Provider, type RefreshResponse, type ResumeReason, type ResumeTarget, type ScrobbleAck, type ScrobbleAction, type ScrobbleHistoryResponse, type ScrobbleMediaType, type ScrobblePlaybackResponse, type ScrobbleRequest, type ScrobbleShowResponse, type ScrobbleState, type ScrobbleStatus, type Source, type SourceResponse, type SourceType, type Subtitle, type SubtitleFormat, createOmssClient, followMediaKey, scrobbleMediaKey };
