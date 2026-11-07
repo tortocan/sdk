@@ -272,3 +272,30 @@ export interface NotificationCount {
 export function followMediaKey(ref: { mediaType: 'movie' | 'tv' | 'show'; tmdbId: number }): string {
     return ref.mediaType === 'movie' ? `m${ref.tmdbId}` : `s${ref.tmdbId}`
 }
+
+/** How a title is offered on a provider. The Watch extension currently emits `flatrate`. */
+export type WatchMonetization = 'flatrate' | 'rent' | 'buy' | 'ads' | 'cinema'
+
+/**
+ * The provider on a watch offer. `id` is a TMDB watch-provider id when the backend matched it
+ * server-side, else null — in which case the client matches the offer to its own provider list by `name`.
+ */
+export interface WatchOfferProvider {
+    id: number | null
+    name: string
+}
+
+/** One provider's offer for a title, with a deep-link to that provider's page for the title. */
+export interface WatchOffer {
+    provider: WatchOfferProvider
+    monetizationType: WatchMonetization
+    url: string
+}
+
+/** `GET /watch/offers` — per-provider streaming deep-links for a title in a region. */
+export interface WatchOffersResponse {
+    type: 'movie' | 'tv'
+    tmdbId: number
+    region: string
+    data: WatchOffer[]
+}

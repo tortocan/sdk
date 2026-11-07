@@ -18,6 +18,7 @@ import type {
     FollowListResponse,
     NotificationListResponse,
     NotificationCount,
+    WatchOffersResponse,
 } from './types'
 import { scrobbleMediaKey, followMediaKey } from './types'
 
@@ -291,6 +292,17 @@ export class OmssClient {
     /** DELETE /notifications — clear all notifications. */
     clearNotifications() {
         return this.requestJson<{ deleted: number }>('/notifications', { method: 'DELETE' })
+    }
+
+    /**
+     * GET /watch/offers — per-provider streaming deep-links (JustWatch-backed) for a title in a region.
+     * `title` is the search seed; the backend disambiguates the result against `tmdbId`. Subscription
+     * (flatrate) offers; an empty `data` array means unavailable/failed, so the caller can fall back to
+     * its own aggregate "where to watch" link. Offers whose `provider.id` is null are matched by name.
+     */
+    getWatchOffers(type: 'movie' | 'tv', tmdbId: number, region: string, title: string) {
+        const q = new URLSearchParams({ type, tmdbId: String(tmdbId), region, title })
+        return this.requestJson<WatchOffersResponse>(`/watch/offers?${q.toString()}`)
     }
 
     /**

@@ -209,6 +209,29 @@ declare function followMediaKey(ref: {
     mediaType: 'movie' | 'tv' | 'show';
     tmdbId: number;
 }): string;
+/** How a title is offered on a provider. The Watch extension currently emits `flatrate`. */
+type WatchMonetization = 'flatrate' | 'rent' | 'buy' | 'ads' | 'cinema';
+/**
+ * The provider on a watch offer. `id` is a TMDB watch-provider id when the backend matched it
+ * server-side, else null — in which case the client matches the offer to its own provider list by `name`.
+ */
+interface WatchOfferProvider {
+    id: number | null;
+    name: string;
+}
+/** One provider's offer for a title, with a deep-link to that provider's page for the title. */
+interface WatchOffer {
+    provider: WatchOfferProvider;
+    monetizationType: WatchMonetization;
+    url: string;
+}
+/** `GET /watch/offers` — per-provider streaming deep-links for a title in a region. */
+interface WatchOffersResponse {
+    type: 'movie' | 'tv';
+    tmdbId: number;
+    region: string;
+    data: WatchOffer[];
+}
 
 interface OmssClientConfig {
     baseUrl: string;
@@ -339,6 +362,13 @@ declare class OmssClient {
         deleted: number;
     }>>;
     /**
+     * GET /watch/offers — per-provider streaming deep-links (JustWatch-backed) for a title in a region.
+     * `title` is the search seed; the backend disambiguates the result against `tmdbId`. Subscription
+     * (flatrate) offers; an empty `data` array means unavailable/failed, so the caller can fall back to
+     * its own aggregate "where to watch" link. Offers whose `provider.id` is null are matched by name.
+     */
+    getWatchOffers(type: 'movie' | 'tv', tmdbId: number, region: string, title: string): Promise<OmssResult<WatchOffersResponse>>;
+    /**
      * Utils Function to set the base URL of the API client after instantiation.
      * Useful when the base URL is not known at the time of client creation.
      */
@@ -350,4 +380,4 @@ declare class OmssClient {
 }
 declare const createOmssClient: (config: OmssClientConfig) => OmssClient;
 
-export { type AudioTrack, type Diagnostic, type DiagnosticSeverity, type ErrorCode, type ErrorObject, type ErrorResponse, type FollowAck, type FollowListResponse, type FollowMediaType, type FollowRequest, type FollowState, type HealthResponse, type NotificationCount, type NotificationItem, type NotificationKind, type NotificationListResponse, OmssClient, type OmssClientConfig, type OmssResult, type Provider, type RefreshResponse, type ResumeReason, type ResumeTarget, type ScrobbleAck, type ScrobbleAction, type ScrobbleHistoryResponse, type ScrobbleMediaType, type ScrobblePlaybackResponse, type ScrobbleRequest, type ScrobbleShowResponse, type ScrobbleState, type ScrobbleStatus, type Source, type SourceResponse, type SourceType, type Subtitle, type SubtitleFormat, createOmssClient, followMediaKey, scrobbleMediaKey };
+export { type AudioTrack, type Diagnostic, type DiagnosticSeverity, type ErrorCode, type ErrorObject, type ErrorResponse, type FollowAck, type FollowListResponse, type FollowMediaType, type FollowRequest, type FollowState, type HealthResponse, type NotificationCount, type NotificationItem, type NotificationKind, type NotificationListResponse, OmssClient, type OmssClientConfig, type OmssResult, type Provider, type RefreshResponse, type ResumeReason, type ResumeTarget, type ScrobbleAck, type ScrobbleAction, type ScrobbleHistoryResponse, type ScrobbleMediaType, type ScrobblePlaybackResponse, type ScrobbleRequest, type ScrobbleShowResponse, type ScrobbleState, type ScrobbleStatus, type Source, type SourceResponse, type SourceType, type Subtitle, type SubtitleFormat, type WatchMonetization, type WatchOffer, type WatchOfferProvider, type WatchOffersResponse, createOmssClient, followMediaKey, scrobbleMediaKey };

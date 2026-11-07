@@ -256,6 +256,16 @@ var OmssClient = class _OmssClient {
     return this.requestJson("/notifications", { method: "DELETE" });
   }
   /**
+   * GET /watch/offers — per-provider streaming deep-links (JustWatch-backed) for a title in a region.
+   * `title` is the search seed; the backend disambiguates the result against `tmdbId`. Subscription
+   * (flatrate) offers; an empty `data` array means unavailable/failed, so the caller can fall back to
+   * its own aggregate "where to watch" link. Offers whose `provider.id` is null are matched by name.
+   */
+  getWatchOffers(type, tmdbId, region, title) {
+    const q = new URLSearchParams({ type, tmdbId: String(tmdbId), region, title });
+    return this.requestJson(`/watch/offers?${q.toString()}`);
+  }
+  /**
    * Utils Function to set the base URL of the API client after instantiation.
    * Useful when the base URL is not known at the time of client creation.
    */
